@@ -1,0 +1,248 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>News Verifier Extension</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap');
+
+    body {
+      font-family: 'Inter', sans-serif;
+      background-color: #121212;
+      color: #e0e0e0;
+      margin: 0;
+      padding: 16px;
+      max-width: 480px;
+      user-select: none;
+    }
+
+    h1 {
+      text-align: center;
+      font-size: 1.4rem;
+      font-weight: 600;
+      margin-bottom: 20px;
+      background: linear-gradient(135deg, #8b5cf6, #06b6d4);
+      background-clip: text;
+      -webkit-background-clip: text;
+      color: transparent;
+    }
+
+    h2 {
+      font-size: 1.1rem;
+      font-weight: 600;
+      margin-bottom: 10px;
+    }
+
+    .section {
+      background-color: #1e1e2a;
+      padding: 16px;
+      border-radius: 12px;
+      margin-bottom: 20px;
+      box-shadow: 0 4px 8px rgba(139, 92, 246, 0.15);
+    }
+
+    button {
+      background: linear-gradient(135deg, #8b5cf6, #06b6d4);
+      color: white;
+      border: none;
+      padding: 10px 18px;
+      font-size: 1rem;
+      font-weight: 600;
+      border-radius: 12px;
+      cursor: pointer;
+      transition: background 0.3s ease;
+      width: 100%;
+    }
+
+    button:hover {
+      background: linear-gradient(135deg, #06b6d4, #8b5cf6);
+    }
+
+    textarea {
+      width: 100%;
+      padding: 10px 12px;
+      border-radius: 8px;
+      border: none;
+      resize: none;
+      font-size: 1rem;
+      font-family: 'Inter', sans-serif;
+      margin-bottom: 12px;
+    }
+
+    .flag-status {
+      font-size: 0.9rem;
+      margin-top: 8px;
+      color: #bbb;
+    }
+
+    .warning {
+      color: #ff6b6b;
+      font-weight: 600;
+      margin-top: 6px;
+    }
+
+    .success {
+      color: #4ade80;
+      font-weight: 600;
+      margin-top: 6px;
+    }
+
+    #community-flags {
+      background-color: #29293d;
+      padding: 10px;
+      border-radius: 8px;
+      font-size: 0.9rem;
+    }
+
+    a {
+      color: #8b5cf6;
+      text-decoration: none;
+    }
+
+    a:hover {
+      text-decoration: underline;
+    }
+  </style>
+</head>
+<body>
+  <h1>News Verifier</h1>
+
+  <div class="section" id="domain-section">
+    <h2>Domain Reputation</h2>
+    <p id="domain-name">(loading...)</p>
+    <p id="domain-warning" class="warning" style="display: none;"></p>
+    <p id="domain-info" class="success" style="display: none;"></p>
+  </div>
+
+  <div class="section" id="page-analysis-section">
+    <h2>Real-Time Page Analysis</h2>
+    <p id="analysis-result">Analyzing content...</p>
+  </div>
+
+  <div class="section" id="flagging-section">
+    <h2>Flag Suspicious Content</h2>
+    <textarea id="flag-reason" rows="3" placeholder="Enter reason for flagging..."></textarea>
+    <button id="flag-button">Submit Flag</button>
+    <p class="flag-status" id="flag-status-msg"></p>
+  </div>
+
+  <div class="section" id="community-verification-section">
+    <h2>Community Flags</h2>
+    <div id="community-flags">Loading community submissions...</div>
+  </div>
+
+  <script>
+    (() => {
+      const UNRELIABLE_DOMAINS = [
+        "infowars.com", "naturalnews.com", "beforeitsnews.com",
+        "yournewswire.com", "worldtruth.tv"
+      ];
+
+      const domainNameEl = document.getElementById('domain-name');
+      const domainWarningEl = document.getElementById('domain-warning');
+      const domainInfoEl = document.getElementById('domain-info');
+      const analysisResultEl = document.getElementById('analysis-result');
+      const flagReasonEl = document.getElementById('flag-reason');
+      const flagButtonEl = document.getElementById('flag-button');
+      const flagStatusMsgEl = document.getElementById('flag-status-msg');
+      const communityFlagsEl = document.getElementById('community-flags');
+      const pageUrl = window.location.href;
+
+      function getDomainFromUrl(url) {
+        try {
+          const parsed = new URL(url);
+          return parsed.hostname.replace('www.', '');
+        } catch {
+          return '';
+        }
+      }
+
+      function simpleRedFlagCheck(text) {
+        const patterns = [
+          /\burgent\b/i, /\bbreaking\b/i, /\bshocking\b/i, /\bexposed\b/i,
+          /\bsecret\b/i, /they don't want you to know/i,
+          /hidden truth/i, /mainstream media won't tell you/i,
+          /!!!+/, /[A-Z]{10,}/
+        ];
+        const phrases = [
+          "you won't believe", "what happened next", "doctors hate this",
+          "this one trick", "the reason will shock you"
+        ];
+        return {
+          sensational: patterns.some(rx => rx.test(text)),
+          clickbait: phrases.some(phrase => text.toLowerCase().includes(phrase))
+        };
+      }
+
+      function updateDomainReputation(domain) {
+        domainNameEl.textContent = domain || "(unknown)";
+        if (UNRELIABLE_DOMAINS.includes(domain)) {
+          domainWarningEl.textContent = `⚠️ ${domain} is flagged as unreliable or biased.`;
+          domainWarningEl.style.display = 'block';
+          domainInfoEl.style.display = 'none';
+        } else {
+          domainInfoEl.textContent = `✅ ${domain} appears reputable.`;
+          domainInfoEl.style.display = 'block';
+          domainWarningEl.style.display = 'none';
+        }
+      }
+
+      function updatePageAnalysis() {
+        const content = document.body.innerText || "";
+        const sliced = content.slice(0, 5000);
+        const flags = simpleRedFlagCheck(sliced);
+        const messages = [];
+        if (flags.sensational) messages.push("⚠️ Sensational language detected.");
+        if (flags.clickbait) messages.push("⚠️ Clickbait patterns found.");
+        if (!messages.length) messages.push("✅ No red flags found.");
+        analysisResultEl.textContent = messages.join(" ");
+      }
+
+      function saveFlag(url, reason) {
+        const key = 'newsVerifierFlags_' + url;
+        const existing = JSON.parse(localStorage.getItem(key)) || [];
+        existing.push({ reason, timestamp: Date.now() });
+        localStorage.setItem(key, JSON.stringify(existing));
+      }
+
+      function loadFlags(url) {
+        const key = 'newsVerifierFlags_' + url;
+        return JSON.parse(localStorage.getItem(key)) || [];
+      }
+
+      function updateCommunityFlags(url) {
+        const flags = loadFlags(url);
+        if (!flags.length) {
+          communityFlagsEl.textContent = "No flags submitted yet.";
+          return;
+        }
+        communityFlagsEl.innerHTML = '';
+        flags.slice(-5).forEach(flag => {
+          const div = document.createElement('div');
+          const date = new Date(flag.timestamp).toLocaleString();
+          div.textContent = `• ${flag.reason} (${date})`;
+          communityFlagsEl.appendChild(div);
+        });
+      }
+
+      flagButtonEl.addEventListener('click', () => {
+        const reason = flagReasonEl.value.trim();
+        if (!reason) {
+          flagStatusMsgEl.textContent = "⚠️ Please enter a reason.";
+          return;
+        }
+        saveFlag(pageUrl, reason);
+        flagStatusMsgEl.textContent = "✅ Flag submitted. Thank you!";
+        flagReasonEl.value = '';
+        updateCommunityFlags(pageUrl);
+      });
+
+      const domain = getDomainFromUrl(pageUrl);
+      updateDomainReputation(domain);
+      updatePageAnalysis();
+      updateCommunityFlags(pageUrl);
+    })();
+  </script>
+</body>
+</html>

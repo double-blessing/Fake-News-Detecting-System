@@ -1,0 +1,24 @@
+{
+  "manifest_version": 3,
+  "name": "News Verifier",
+  "version": "1.0",
+  "description": "Verify news articles with real-time analysis and community flags.",
+  "permissions": ["activeTab", "storage", "scripting"],
+  "action": {
+    "default_popup": "browser-extension.html",
+    "default_icon": {
+      "16": "icon16.png",
+      "48": "icon48.png",
+      "128": "icon128.png"
+    }
+  },
+  "icons": {
+    "16": "icon16.png",
+    "48": "icon48.png",
+    "128": "icon128.png"
+  },
+  "background": {
+    "service_worker": "background.js"
+  }
+}
+
